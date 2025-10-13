@@ -1,0 +1,268 @@
+# app.py
+import json
+from typing import List, Dict
+from copy import deepcopy
+import streamlit as st
+
+import logic as L  # <-- NEW: use the pure-logic module
+
+# ----------------------------
+# ------- UI Utilities -------
+# ----------------------------
+
+# Reuse constants from logic
+GROUPS = L.GROUPS
+POT_LABELS = L.POT_LABELS
+
+def init_session_state():
+    """
+    Initialize state exactly once and seed default pots so we never hit KeyError ('pot1').
+    """
+    if "initialized" not in st.session_state:
+        st.session_state.pots = deepcopy(DEFAULT_POTS)  # seed defaults
+        st.session_state.groups = {g: [] for g in GROUPS}
+        st.session_state.draw_order = {p: [] for p in POT_LABELS}
+        st.session_state.queue = []  # list of tuples (pot_label, team_index_in_pot_snapshot)
+        st.session_state.log = []
+        st.session_state.seed = None
+        st.session_state.initialized = True
+        if "pots_baseline" not in st.session_state:
+            st.session_state.pots_baseline = deepcopy(st.session_state.pots)
+
+    # Safety guard in case someone cleared pots elsewhere
+    for key in POT_LABELS:
+        st.session_state.pots.setdefault(key, [])
+
+def reset_state(pots):
+    # Deep-copy to avoid mutating caller/defaults
+    st.session_state.pots = deepcopy(pots)
+    st.session_state.groups = {g: [] for g in GROUPS}
+    st.session_state.draw_order = {p: [] for p in POT_LABELS}
+    st.session_state.queue = []
+    st.session_state.log = []
+
+def soft_reset_to_baseline():
+    """Reset the draw back to the last configured pots (baseline), preserving the seed toggle."""
+    reset_state(st.session_state.pots_baseline)
+    st.success("Draw reset to last configured pots.")
+
+def render_title():
+    # --- World Cup logo ---
+    st.markdown(
+        """
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:20px;">
+            <img src="https://upload.wikimedia.org/wikipedia/en/1/17/2026_FIFA_World_Cup_emblem.svg"
+                 alt="World Cup 2026 Logo" style="width:140px;height:auto;margin-bottom:10px;">
+            <h1 style="margin:0;">World Cup 2026 Draw Simulator</h1>
+            <span style="opacity:0.7;">(Groups A–L • 12 groups × 4 teams)</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_groups_table(groups):
+    # 12 groups in a grid (4 columns x 3 rows)
+    cols = st.columns(4)
+    for idx, g in enumerate(GROUPS):
+        with cols[idx % 4]:
+            st.markdown(f"### Group {g}")
+            teams = groups[g]
+            # Fill with placeholders to 4 slots
+            rows = teams + [{"name":"—","confederation":"—","pot":"—"}]*(4-len(teams))
+            style = "border:1px solid #e5e7eb;border-radius:14px;padding:8px 10px;margin-bottom:12px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04);"
+            st.markdown(f"<div style='{style}'>", unsafe_allow_html=True)
+            for t in rows:
+                slot = f"{t['name']} ({t['confederation']})" if t['name']!="—" else "—"
+                st.markdown(f"- {slot}")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+def render_pots(pots):
+    st.markdown("---")
+    st.markdown("## Pots (remaining)")
+    # Display all four pots in one row
+    pot_cols = st.columns(4)
+
+    for i, pot_label in enumerate(POT_LABELS):
+        with pot_cols[i]:
+            st.markdown(f"<h4 style='margin-bottom:4px'>{pot_label.upper()}</h4>", unsafe_allow_html=True)
+            if pots.get(pot_label):
+                for t in pots[pot_label]:
+                    st.markdown(
+                        f"<div style='padding:4px 6px;margin:2px 0;border-radius:6px;background:#ffffff;border:1px solid #eee;'>"
+                        f"<strong>{t['name']}</strong> <span style='opacity:0.7'>({t['confederation']})</span>"
+                        f"</div>",
+                        unsafe_allow_html=True
+                    )
+            else:
+                st.markdown("<span style='opacity:0.6;font-style:italic;'>Empty</span>", unsafe_allow_html=True)
+
+def parse_pot_string(pot_text: str, pot_num: int) -> List[Dict]:
+    """
+    Parse a multiline string like:
+        🇲🇽 Mexico, CONCACAF
+        🇺🇸 United States, CONCACAF
+    into a list of {name, confederation, pot}.
+    Blank lines are ignored.
+    """
+    teams = []
+    for line in pot_text.strip().splitlines():
+        if not line.strip():
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 2:
+            st.warning(f"Skipping invalid line in Pot {pot_num}: '{line}' (expected 'Name, Confederation')")
+            continue
+        name, confed = parts[0], parts[1]
+        teams.append({"name": name, "confederation": confed, "pot": pot_num})
+    return teams
+
+def ui_controls():
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        if st.button("🎲 Draw next team", use_container_width=True):
+            L.draw_next_team(st.session_state)
+    with c2:
+        if st.button("🏁 Complete the draw", use_container_width=True):
+            L.complete_draw(st.session_state)
+    with c3:
+        if st.button("🔁 Reset draw", use_container_width=True):
+            soft_reset_to_baseline()
+
+    st.caption("Tip: You can set a random seed, paste custom pots below, then click **Reset with these pots**.")
+
+# ----------------------------
+# ---------- App UI ----------
+# ----------------------------
+
+DEFAULT_POTS = {
+    "pot1": [
+        {"name": "🇲🇽 Mexico", "confederation": "CONCACAF", "pot": 1},
+        {"name": "🇨🇦 Canada", "confederation": "CONCACAF", "pot": 1},
+        {"name": "🇺🇸 United States", "confederation": "CONCACAF", "pot": 1},
+        {"name": "🇧🇷 Brazil", "confederation": "CONMEBOL", "pot": 1},
+        {"name": "🇦🇷 Argentina", "confederation": "CONMEBOL", "pot": 1},
+        {"name": "🇫🇷 France", "confederation": "UEFA", "pot": 1},
+        {"name": "🏴 England", "confederation": "UEFA", "pot": 1},
+        {"name": "🇪🇸 Spain", "confederation": "UEFA", "pot": 1},
+        {"name": "🇵🇹 Portugal", "confederation": "UEFA", "pot": 1},
+        {"name": "🇧🇪 Belgium", "confederation": "UEFA", "pot": 1},
+        {"name": "🇳🇱 Netherlands", "confederation": "UEFA", "pot": 1},
+        {"name": "🇭🇷 Croatia", "confederation": "UEFA", "pot": 1},
+    ],
+    "pot2": [
+        {"name": "🇩🇪 Germany", "confederation": "UEFA", "pot": 2},
+        {"name": "🇲🇦 Morocco", "confederation": "CAF", "pot": 2},
+        {"name": "🇨🇴 Colombia", "confederation": "CONMEBOL", "pot": 2},
+        {"name": "🇺🇾 Uruguay", "confederation": "CONMEBOL", "pot": 2},
+        {"name": "🇯🇵 Japan", "confederation": "AFC", "pot": 2},
+        {"name": "🇪🇨 Ecuador", "confederation": "CONMEBOL", "pot": 2},
+        {"name": "🇨🇭 Switzerland", "confederation": "UEFA", "pot": 2},
+        {"name": "🇸🇳 Senegal", "confederation": "CAF", "pot": 2},
+        {"name": "🇮🇷 Iran", "confederation": "AFC", "pot": 2},
+        {"name": "🇩🇰 Denmark", "confederation": "UEFA", "pot": 2},
+        {"name": "🇰🇷 South Korea", "confederation": "AFC", "pot": 2},
+        {"name": "🇦🇺 Australia", "confederation": "AFC", "pot": 2},
+    ],
+    "pot3": [
+        {"name": "🇦🇹 Austria", "confederation": "UEFA", "pot": 3},
+        {"name": "🇵🇦 Panama", "confederation": "CONCACAF", "pot": 3},
+        {"name": "🇳🇴 Norway", "confederation": "UEFA", "pot": 3},
+        {"name": "🇪🇬 Egypt", "confederation": "CAF", "pot": 3},
+        {"name": "🇩🇿 Algeria", "confederation": "CAF", "pot": 3},
+        {"name": "🇵🇾 Paraguay", "confederation": "CONMEBOL", "pot": 3},
+        {"name": "🇨🇮 Ivory Coast", "confederation": "CAF", "pot": 3},
+        {"name": "🇹🇳 Tunisia", "confederation": "CAF", "pot": 3},
+        {"name": "🇨🇷 Costa Rica", "confederation": "CONCACAF", "pot": 3},
+        {"name": "🇺🇿 Uzbekistan", "confederation": "AFC", "pot": 3},
+        {"name": "🇸🇦 Saudi Arabia", "confederation": "AFC", "pot": 3},
+        {"name": "🇿🇦 South Africa", "confederation": "CAF", "pot": 3}
+    ],
+    "pot4": [
+        {"name": "🇶🇦 Qatar", "confederation": "AFC", "pot": 4},
+        {"name": "🇯🇲 Jamaica", "confederation": "CONCACAF", "pot": 4},
+        {"name": "🇯🇴 Jordan", "confederation": "AFC", "pot": 4},
+        {"name": "🇬🇭 Ghana", "confederation": "CAF", "pot": 4},
+        {"name": "🇳🇿 New Zealand", "confederation": "OFC", "pot": 4},
+        {"name": "🇨🇻 Cape Verde", "confederation": "CAF", "pot": 4},
+        {"name": "🇮🇹 Italy", "confederation": "UEFA", "pot": 4},
+        {"name": "🇹🇷 Turkey", "confederation": "UEFA", "pot": 4},
+        {"name": "🇺🇦 Ukraine", "confederation": "UEFA", "pot": 4},
+        {"name": "🇸🇪 Sweden", "confederation": "UEFA", "pot": 4},
+        {"name": "🇧🇴 Bolivia", "confederation": "CONMEBOL", "pot": 4},
+        {"name": "🇨🇲 Cameroon", "confederation": "CAF", "pot": 4},
+    ]
+}
+
+def main():
+    st.set_page_config(page_title="World Cup 2026 Draw Simulator", layout="wide")
+    init_session_state()
+    render_title()
+
+    # Sidebar controls
+    with st.sidebar:
+        st.markdown("### Settings")
+        seed = st.number_input("Random seed (optional)", value=0, step=1)
+        seed_toggle = st.checkbox("Use seed", value=False)
+        st.session_state.seed = seed if seed_toggle else None
+
+        st.markdown("### Pots Setup")
+
+        # Pre-fill each pot's textarea from DEFAULT_POTS
+        default_pot_texts = {
+            1: "\n".join([f"{t['name']}, {t['confederation']}" for t in DEFAULT_POTS["pot1"]]),
+            2: "\n".join([f"{t['name']}, {t['confederation']}" for t in DEFAULT_POTS["pot2"]]),
+            3: "\n".join([f"{t['name']}, {t['confederation']}" for t in DEFAULT_POTS["pot3"]]),
+            4: "\n".join([f"{t['name']}, {t['confederation']}" for t in DEFAULT_POTS["pot4"]]),
+        }
+
+        pot_inputs = {}
+        for pot_num in range(1, 5):
+            pot_inputs[pot_num] = st.text_area(
+                f"Pot {pot_num} teams (one per line: 'Team Name, Confederation')",
+                value=default_pot_texts[pot_num],
+                height=180
+            )
+
+        if st.button("Reset with these pots"):
+            try:
+                new_pots = {}
+                ok = True
+                for pot_num in range(1, 5):
+                    pot_label = f"pot{pot_num}"
+                    new_pots[pot_label] = parse_pot_string(pot_inputs[pot_num], pot_num)
+                    if len(new_pots[pot_label]) != 12:
+                        st.error(f"{pot_label} has {len(new_pots[pot_label])}/12 teams. Please provide exactly 12.")
+                        ok = False
+
+                # Light validation
+                if ok:
+                    for p_label, teams in new_pots.items():
+                        for t in teams:
+                            if not {"name", "confederation", "pot"} <= t.keys():
+                                st.error(f"Team in {p_label} missing fields.")
+                                ok = False
+                                break
+
+                if ok:
+                    reset_state(new_pots)
+                    st.session_state.pots_baseline = deepcopy(new_pots)  # keep baseline in sync
+                    st.success("Pots successfully updated.")
+            except Exception as e:
+                st.error(f"Error parsing pots: {e}")
+
+    # Draw controls
+    ui_controls()
+
+    # Live groups table
+    render_groups_table(st.session_state.groups)
+
+    # Remaining pots
+    render_pots(st.session_state.pots)
+
+    # Log
+    with st.expander("Draw log"):
+        for line in st.session_state.log:
+            st.write(line)
+
+if __name__ == "__main__":
+    main()
