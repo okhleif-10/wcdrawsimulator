@@ -142,7 +142,7 @@ DEFAULT_POTS = {
         {"name": "🇧🇷 Brazil", "confederation": "CONMEBOL", "pot": 1},
         {"name": "🇦🇷 Argentina", "confederation": "CONMEBOL", "pot": 1},
         {"name": "🇫🇷 France", "confederation": "UEFA", "pot": 1},
-        {"name": "🏴 England", "confederation": "UEFA", "pot": 1},
+        {"name": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 England", "confederation": "UEFA", "pot": 1},
         {"name": "🇪🇸 Spain", "confederation": "UEFA", "pot": 1},
         {"name": "🇵🇹 Portugal", "confederation": "UEFA", "pot": 1},
         {"name": "🇧🇪 Belgium", "confederation": "UEFA", "pot": 1},
@@ -187,7 +187,7 @@ DEFAULT_POTS = {
         {"name": "🇮🇹 Italy", "confederation": "UEFA", "pot": 4},
         {"name": "🇹🇷 Turkey", "confederation": "UEFA", "pot": 4},
         {"name": "🇺🇦 Ukraine", "confederation": "UEFA", "pot": 4},
-        {"name": "🇸🇪 Sweden", "confederation": "UEFA", "pot": 4},
+        {"name": "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", "confederation": "UEFA", "pot": 4},
         {"name": "🇧🇴 Bolivia", "confederation": "CONMEBOL", "pot": 4},
         {"name": "🇨🇲 Cameroon", "confederation": "CAF", "pot": 4},
     ]
