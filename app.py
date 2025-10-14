@@ -3,6 +3,7 @@ import json
 from typing import List, Dict
 from copy import deepcopy
 import streamlit as st
+import time
 
 import logic as L  # <-- NEW: use the pure-logic module
 
@@ -76,6 +77,55 @@ def render_groups_table(groups):
                 st.markdown(f"- {slot}")
             st.markdown("</div>", unsafe_allow_html=True)
 
+
+def show_failure_and_autoretry(msg: str, seconds: int = 3):
+    """Show a full-screen popup and auto-reset + rerun after N seconds."""
+    st.markdown(
+        f"""
+        <style>
+        .wc-overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,.6);
+          z-index: 9999; display: flex; align-items: center; justify-content: center; }}
+        .wc-card {{ background: #fff; border-radius: 20px; padding: 28px 36px; max-width: 560px;
+          box-shadow: 0 15px 50px rgba(0,0,0,.3); text-align: center; }}
+        .wc-card h2 {{ margin: 0 0 8px; font-size: 1.75rem; }}
+        .wc-card p {{ margin: 0; opacity: .85; }}
+        </style>
+        <div class="wc-overlay">
+          <div class="wc-card">
+            <h2>❌ Draw Failed</h2>
+            <p>{msg}</p>
+            <p>Auto-retrying in <strong id="wc-count">{seconds}</strong>s…</p>
+          </div>
+        </div>
+        <script>
+          (function(){{
+            let n = {seconds};
+            const el = document.getElementById("wc-count");
+            const tick = () => {{
+              n = Math.max(0, n-1);
+              if (el) el.textContent = n;
+              if (n > 0) setTimeout(tick, 1000);
+            }};
+            tick();
+          }})();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+    time.sleep(seconds)
+    try:
+        if "pots_baseline" in st.session_state:
+            reset_state(st.session_state.pots_baseline)
+        else:
+            soft_reset_to_baseline()
+    except Exception:
+        pass
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
+
+
 def render_pots(pots):
     st.markdown("---")
     st.markdown("## Pots (remaining)")
@@ -120,15 +170,26 @@ def ui_controls():
     c1, c2, c3 = st.columns([1,1,1])
     with c1:
         if st.button("🎲 Draw next team", use_container_width=True):
-            L.draw_next_team(st.session_state)
+            try:
+                L.draw_next_team(st.session_state)
+                # if logic flagged a failure, show popup + auto-rerun
+                if st.session_state.get("error"):
+                    msg = st.session_state.pop("error")
+                    show_failure_and_autoretry(msg)
+            except Exception as e:
+                # hard failure: surface and auto-rerun
+                st.session_state["error"] = f"{e}"
+                show_failure_and_autoretry(str(e))
     with c2:
         if st.button("🏁 Complete the draw", use_container_width=True):
-            L.complete_draw(st.session_state)
+            ok = L.complete_draw(st.session_state)
+            if not ok or "error" in st.session_state:
+                show_failure_and_autoretry(st.session_state.pop("error", "A constraint couldn’t be fulfilled."))
+
     with c3:
         if st.button("🔁 Reset draw", use_container_width=True):
             soft_reset_to_baseline()
 
-    st.caption("Tip: You can set a random seed, paste custom pots below, then click **Reset with these pots**.")
 
 # ----------------------------
 # ---------- App UI ----------
