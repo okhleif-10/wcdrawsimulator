@@ -11,8 +11,8 @@ POT_LABELS = ["pot1", "pot2", "pot3", "pot4"]
 
 HOSTS_POT1 = [
     ("🇲🇽 Mexico", "A"),
-    ("🇺🇸 United States", "B"),
-    ("🇨🇦 Canada", "D"),
+    ("🇨🇦 Canada", "B"),
+    ("🇺🇸 United States", "D"),
 ]
 UEFA = "UEFA"
 MAX_PER_CONFED = 1
