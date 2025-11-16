@@ -95,6 +95,7 @@ def perfect_matching(
     Bipartite matching: teams -> groups (of current size `required_size`).
     Returns {group -> team_name} if perfect assignment exists; else None.
     """
+    # Build candidate lists
     candidates: Dict[str, List[str]] = {
         t["name"]: candidate_groups(t, groups_after, required_size) for t in remaining_teams
     }
@@ -113,12 +114,35 @@ def perfect_matching(
                 return True
         return False
 
-    # Small heuristic: order teams by fewest options first (reduces dead-ends).
+    # Heuristic: teams with fewer options first
     order = sorted(remaining_teams, key=lambda t: len(candidates[t["name"]]))
     for t in order:
         if not try_assign(t["name"], set()):
             return None
     return match_team_for_group
+
+def find_safe_group_for_team(
+    groups: Dict[str, List[Dict]],
+    team: Dict,
+    remaining_teams: List[Dict],
+    required_size: int
+) -> Optional[str]:
+    """
+    Choose a group for `team` such that:
+      1) The group is a legal candidate now; and
+      2) After placing `team` there, all `remaining_teams` can still be assigned
+         via a perfect matching.
+    Returns the chosen group letter, or None if none are safe.
+    """
+    cands = candidate_groups(team, groups, required_size)
+    for g in sorted(cands):
+        # Simulate placing team into g
+        new_groups = {k: list(v) for k, v in groups.items()}
+        new_groups[g] = list(new_groups[g]) + [team]
+        # Check global feasibility for the rest
+        if perfect_matching(new_groups, remaining_teams, required_size) is not None:
+            return g
+    return None
 
 # ----------------------------
 # --------- Pot Steps --------
@@ -157,85 +181,60 @@ def pot1(state: Dict) -> bool:
 
 def pot2(state: Dict) -> bool:
     """
-    Pot 2: Greedy into groups with exactly 1 team. If a greedy step fails,
-    solve the entire remaining set with perfect matching and commit.
+    Pot 2: For each team, pick a group that is legal *and* keeps a feasible
+    completion for the remaining pot2 teams (via perfect_matching lookahead).
     """
     pot = state["pots"]["pot2"]
     rnd = random.Random(state.get("seed"))
     rnd.shuffle(pot)
 
-    for _ in range(len(pot)):
+    # Work through the live pot list
+    while pot:
         team = pot[0]
         if team_already_placed(state["groups"], team):
             pot.remove(team)
             continue
-        g = first_available_group_with_constraints(state["groups"], team, target_size=1, allow_fallback=False)
-        if g is not None:
-            state["groups"][g].append(team)
-            state["log"].append(f"Pot2: {team['name']} to Group {g}")
-            state["pots"]["pot2"].remove(team)
-            continue
 
-        # Global fix-up
-        remaining = list(state["pots"]["pot2"])
-        mapping = perfect_matching(state["groups"], remaining, required_size=1)
-        if mapping is None:
-            set_error(state, f"Pot2 placement failed for {team['name']}.")
+        # Remaining teams after this one
+        remaining = [t for t in pot[1:] if not team_already_placed(state["groups"], t)]
+
+        g = find_safe_group_for_team(state["groups"], team, remaining, required_size=1)
+        if g is None:
+            set_error(state, f"Pot2 placement failed for {team['name']} (no safe group).")
             return False
 
-        # Commit mapping
-        name_to_team = {t["name"]: t for t in remaining}
-        for gg, tname in mapping.items():
-            tt = name_to_team[tname]
-            if not team_already_placed(state["groups"], tt):
-                state["groups"][gg].append(tt)
-            if tt in state["pots"]["pot2"]:
-                state["pots"]["pot2"].remove(tt)
-            state["log"].append(f"Pot2: {tt['name']} to Group {gg}")
-        clear_queues(state, ["p2_queue"])
-        return True
+        state["groups"][g].append(team)
+        state["log"].append(f"Pot2: {team['name']} to Group {g}")
+        state["pots"]["pot2"].remove(team)  # also removes from pot, since pot is same list
 
     clear_queues(state, ["p2_queue"])
     return True
 
 def pot3(state: Dict) -> bool:
     """
-    Pot 3: Greedy into groups with exactly 2 teams. If a greedy step fails,
-    solve the entire remaining set with perfect matching and commit.
+    Pot 3: For each team, pick a group that is legal *and* keeps a feasible
+    completion for the remaining pot3 teams (via perfect_matching lookahead).
     """
     pot = state["pots"]["pot3"]
     rnd = random.Random(state.get("seed"))
     rnd.shuffle(pot)
 
-    for _ in range(len(pot)):
+    while pot:
         team = pot[0]
         if team_already_placed(state["groups"], team):
             pot.remove(team)
             continue
-        g = first_available_group_with_constraints(state["groups"], team, target_size=2, allow_fallback=False)
-        if g is not None:
-            state["groups"][g].append(team)
-            state["log"].append(f"Pot3: {team['name']} to Group {g}")
-            state["pots"]["pot3"].remove(team)
-            continue
 
-        # Global fix-up
-        remaining = list(state["pots"]["pot3"])
-        mapping = perfect_matching(state["groups"], remaining, required_size=2)
-        if mapping is None:
-            set_error(state, f"Pot3 placement failed for {team['name']}.")
+        remaining = [t for t in pot[1:] if not team_already_placed(state["groups"], t)]
+
+        g = find_safe_group_for_team(state["groups"], team, remaining, required_size=2)
+        if g is None:
+            set_error(state, f"Pot3 placement failed for {team['name']} (no safe group).")
             return False
 
-        name_to_team = {t["name"]: t for t in remaining}
-        for gg, tname in mapping.items():
-            tt = name_to_team[tname]
-            if not team_already_placed(state["groups"], tt):
-                state["groups"][gg].append(tt)
-            if tt in state["pots"]["pot3"]:
-                state["pots"]["pot3"].remove(tt)
-            state["log"].append(f"Pot3: {tt['name']} to Group {gg}")
-        clear_queues(state, ["p3_queue"])
-        return True
+        state["groups"][g].append(team)
+        state["log"].append(f"Pot3: {team['name']} to Group {g}")
+        state["pots"]["pot3"].remove(team)
 
     clear_queues(state, ["p3_queue"])
     return True
@@ -251,7 +250,11 @@ def pot4(state: Dict) -> bool:
     rnd = random.Random(state.get("seed"))
     rnd.shuffle(pot)
 
-    def backtrack(groups_snapshot: Dict[str, List[Dict]], remaining: List[Dict], placed_sequence: List[Tuple[str, Dict]]):
+    def backtrack(
+        groups_snapshot: Dict[str, List[Dict]],
+        remaining: List[Dict],
+        placed_sequence: List[Tuple[str, Dict]]
+    ):
         if not remaining:
             return groups_snapshot, placed_sequence
 
@@ -287,6 +290,8 @@ def draw_next_team(state: Dict):
     """
     Draw one team respecting rules; never throws.
     Uses queues but sanitizes against duplicates and stale queues.
+    Adds lookahead (perfect_matching) for pot2 and pot3 so we don't
+    pigeonhole future teams.
     """
     # Pot 1
     if state["pots"]["pot1"]:
@@ -334,26 +339,21 @@ def draw_next_team(state: Dict):
             if team in state["pots"]["pot2"]:
                 state["pots"]["pot2"].remove(team)
             return
-        g = first_available_group_with_constraints(state["groups"], team, target_size=1)
+
+        # Remaining teams in this pot after this team
+        remaining = [
+            t for t in state["pots"]["pot2"]
+            if t["name"] != team["name"] and not team_already_placed(state["groups"], t)
+        ]
+
+        g = find_safe_group_for_team(state["groups"], team, remaining, required_size=1)
         if g is None:
-            # try global
-            remaining = [team] + list(state["p2_queue"])
-            mapping = perfect_matching(state["groups"], remaining, required_size=1)
-            if mapping is None:
-                state["log"].append(f"Pot2: no legal slot yet for {team['name']} — try again or change seed.")
-                state["p2_queue"].insert(0, team)
-                return
-            name_to_team = {t["name"]: t for t in remaining}
-            for gg, tname in mapping.items():
-                tt = name_to_team[tname]
-                if not team_already_placed(state["groups"], tt):
-                    state["groups"][gg].append(tt)
-                if tt in state["pots"]["pot2"]:
-                    state["pots"]["pot2"].remove(tt)
-                if tt in state["p2_queue"]:
-                    state["p2_queue"].remove(tt)
-                state["log"].append(f"Pot2: {tt['name']} to Group {gg}")
-            clear_queues(state, ["p2_queue"])
+            # Cannot place this team without making the rest impossible
+            msg = f"Pot2: cannot safely place {team['name']} under constraints."
+            state["log"].append(msg)
+            state["error"] = msg
+            # put it back so the UI can decide to rerun/reset
+            state["p2_queue"].insert(0, team)
             return
 
         state["groups"][g].append(team)
@@ -375,26 +375,17 @@ def draw_next_team(state: Dict):
                 state["pots"]["pot3"].remove(team)
             return
 
-        g = first_available_group_with_constraints(state["groups"], team, target_size=2)
+        remaining = [
+            t for t in state["pots"]["pot3"]
+            if t["name"] != team["name"] and not team_already_placed(state["groups"], t)
+        ]
+
+        g = find_safe_group_for_team(state["groups"], team, remaining, required_size=2)
         if g is None:
-            remaining = [team] + list(state["p3_queue"])
-            mapping = perfect_matching(state["groups"], remaining, required_size=2)
-            if mapping is None:
-                state["log"].append(f"Pot3: failed to place {team['name']}.")
-                state["error"] = f"Pot 3 failed: cannot place {team['name']} under constraints."
-                state["p3_queue"].insert(0, team)
-                return
-            name_to_team = {t["name"]: t for t in remaining}
-            for gg, tname in mapping.items():
-                tt = name_to_team[tname]
-                if not team_already_placed(state["groups"], tt):
-                    state["groups"][gg].append(tt)
-                if tt in state["pots"]["pot3"]:
-                    state["pots"]["pot3"].remove(tt)
-                if tt in state["p3_queue"]:
-                    state["p3_queue"].remove(tt)
-                state["log"].append(f"Pot3: {tt['name']} to Group {gg}")
-            clear_queues(state, ["p3_queue"])
+            msg = f"Pot3: cannot safely place {team['name']} under constraints."
+            state["log"].append(msg)
+            state["error"] = msg
+            state["p3_queue"].insert(0, team)
             return
 
         state["groups"][g].append(team)
@@ -470,9 +461,12 @@ def complete_draw(state: Dict) -> bool:
     if state["pots"]["pot1"]:
         pot1(state)
     if state["pots"]["pot2"]:
-        if not pot2(state): return False
+        if not pot2(state):
+            return False
     if state["pots"]["pot3"]:
-        if not pot3(state): return False
+        if not pot3(state):
+            return False
     if state["pots"]["pot4"]:
-        if not pot4(state): return False
+        if not pot4(state):
+            return False
     return True
