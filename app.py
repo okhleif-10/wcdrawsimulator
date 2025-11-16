@@ -68,47 +68,35 @@ def render_title():
 
 
 def render_groups_table(groups):
-    # MOBILE-FRIENDLY CSS (forces alphabetical stacking on small screens)
-    st.markdown("""
-        <style>
-        /* Mobile layout override */
-        @media (max-width: 768px) {
-            .wc-group-col {
-                width: 100% !important;
-                display: block !important;
-            }
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # Display 12 groups as 3 rows × 4 columns, but *rendered* row-major
+    groups_per_row = 4
+    style = (
+        "border:1px solid #e5e7eb;border-radius:14px;"
+        "padding:8px 10px;margin-bottom:12px;background:#fff;"
+        "box-shadow:0 1px 2px rgba(0,0,0,.04);"
+    )
 
-    # Desktop: 4 columns (same as before)
-    cols = st.columns(4)
+    # Process groups in alphabetical chunks of 4 for ios:
+    # [A,B,C,D], [E,F,G,H], [I,J,K,L]
+    for row_start in range(0, len(GROUPS), groups_per_row):
+        row_groups = GROUPS[row_start:row_start + groups_per_row]
+        cols = st.columns(len(row_groups))
 
-    for idx, g in enumerate(GROUPS):
-        # Wrap each column in a class we override on mobile
-        with cols[idx % 4]:
-            st.markdown(
-                f"<div class='wc-group-col'>",
-                unsafe_allow_html=True
-            )
+        for col_idx, g in enumerate(row_groups):
+            with cols[col_idx]:
+                st.markdown(f"### Group {g}")
 
-            st.markdown(f"### Group {g}")
-            teams = groups[g]
-            rows = teams + [{"name": "—", "confederation": "—", "pot": "—"}] * (4 - len(teams))
+                teams = groups[g]
+                rows = teams + [{"name": "—", "confederation": "—", "pot": "—"}] * (4 - len(teams))
 
-            style = (
-                "border:1px solid #e5e7eb;border-radius:14px;"
-                "padding:8px 10px;margin-bottom:12px;background:#fff;"
-                "box-shadow:0 1px 2px rgba(0,0,0,.04);"
-            )
-            st.markdown(f"<div style='{style}'>", unsafe_allow_html=True)
-
-            for t in rows:
-                slot = f"{t['name']} ({t['confederation']})" if t['name'] != "—" else "—"
-                st.markdown(f"- {slot}")
-
-            st.markdown("</div></div>", unsafe_allow_html=True)
-
+                st.markdown(f"<div style='{style}'>", unsafe_allow_html=True)
+                for t in rows:
+                    if t["name"] == "—":
+                        slot = "—"
+                    else:
+                        slot = f"{t['name']} ({t['confederation']})"
+                    st.markdown(f"- {slot}")
+                st.markdown("</div>", unsafe_allow_html=True)
 
 
 def show_failure_and_autoretry(msg: str, seconds: int = 3):
