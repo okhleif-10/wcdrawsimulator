@@ -13,11 +13,9 @@ HOSTS_POT1 = [
     ("🇨🇦 Canada", "B"),
     ("🇺🇸 United States", "D"),
 ]
-
 UEFA = "UEFA"
 MAX_PER_CONFED = 1
 MAX_UEFA = 2
-
 
 # ----------------------------
 # -------- Helpers --------
@@ -27,7 +25,6 @@ def set_error(state: Dict, msg: str) -> None:
     state["error"] = msg
     state["log"].append(f"❌ {msg}")
 
-
 def team_already_placed(groups: Dict[str, List[Dict]], team: Dict) -> bool:
     name = team["name"]
     for g in GROUPS:
@@ -35,27 +32,22 @@ def team_already_placed(groups: Dict[str, List[Dict]], team: Dict) -> bool:
             return True
     return False
 
-
 def clear_queues(state: Dict, which: Optional[List[str]] = None) -> None:
-    """Remove stale draw queues after a full reset, if you want to call this from the app."""
+    """Remove stale draw queues after a full reset."""
     keys = which or ["p1_queue", "p2_queue", "p3_queue", "p4_queue"]
     for k in keys:
         if k in state:
             del state[k]
 
-
 def group_has_uefa(group: List[Dict]) -> bool:
     return any(t["confederation"] == UEFA for t in group)
-
 
 def groups_without_uefa(groups: Dict[str, List[Dict]]) -> List[str]:
     """Return all group letters that currently have no UEFA team."""
     return [g for g in GROUPS if not group_has_uefa(groups[g])]
 
-
 def count_uefa_teams(teams: List[Dict]) -> int:
     return sum(1 for t in teams if t["confederation"] == UEFA)
-
 
 def uefa_requirement_enabled(state: Dict) -> bool:
     """
@@ -64,7 +56,6 @@ def uefa_requirement_enabled(state: Dict) -> bool:
     Default to True if not set.
     """
     return state.get("require_uefa_in_every_group", True)
-
 
 # ----------------------------
 # --- Global UEFA feasibility
@@ -143,13 +134,11 @@ def confed_ok_to_add(group: List[Dict], team: Dict) -> bool:
     else:
         return confeds.count(confed) < MAX_PER_CONFED
 
-
 def first_available_group_for_pot1_after_hosts(groups_filled: Dict[str, List[Dict]]) -> Optional[str]:
     for g in GROUPS:
         if len(groups_filled[g]) == 0:
             return g
     return None
-
 
 # ---------- Generic candidate & matching ----------
 
@@ -162,7 +151,6 @@ def candidate_groups(team: Dict, groups_after: Dict[str, List[Dict]], required_s
         g for g in GROUPS
         if len(groups_after[g]) == required_size and confed_ok_to_add(groups_after[g], team)
     ]
-
 
 def perfect_matching(
     groups_after: Dict[str, List[Dict]],
@@ -199,7 +187,6 @@ def perfect_matching(
             return None
     return match_team_for_group
 
-
 def find_safe_group_for_team(
     groups: Dict[str, List[Dict]],
     team: Dict,
@@ -217,7 +204,6 @@ def find_safe_group_for_team(
         if perfect_matching(new_groups, remaining_teams, required_size) is not None:
             return g
     return None
-
 
 def find_safe_group_for_pot2_uefa(
     state: Dict,
@@ -251,10 +237,8 @@ def find_safe_group_for_pot2_uefa(
 
     return None
 
-
 def pot4_possibilities(groups_now: Dict[str, List[Dict]], team: Dict) -> List[str]:
     return candidate_groups(team, groups_now, required_size=3)
-
 
 # ----------------------------
 # ---- Incremental Drawing ----
@@ -654,7 +638,6 @@ def draw_next_team(state: Dict):
             state["log"].append(f"Pot4: {tt['name']} to Group {gg}")
         clear_queues(state, ["p4_queue"])
         return
-
 
 def complete_draw(state: Dict) -> bool:
     """
