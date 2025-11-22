@@ -20,9 +20,13 @@ def init_session_state():
     """
     Initialize state exactly once and seed default pots so we never hit KeyError ('pot1').
     """
+    # Only set the default once; don't overwrite what the sidebar chose
+    if "require_uefa_in_every_group" not in st.session_state:
+        st.session_state.require_uefa_in_every_group = True
+
     if "initialized" not in st.session_state:
         st.session_state.pots_source_key = "Ranking Based (default)"   # which preset we're using
-        st.session_state.pots = deepcopy(DEFAULT_POTS)            # seed defaults
+        st.session_state.pots = deepcopy(DEFAULT_POTS)                  # seed defaults
         st.session_state.groups = {g: [] for g in GROUPS}
         st.session_state.draw_order = {p: [] for p in POT_LABELS}
         st.session_state.queue = []  # list of tuples (pot_label, team_index_in_pot_snapshot)
@@ -76,7 +80,7 @@ def render_groups_table(groups):
         "box-shadow:0 1px 2px rgba(0,0,0,.04);"
     )
 
-    # Process groups in alphabetical chunks of 4 for ios:
+    # Process groups in alphabetical chunks of 4:
     # [A,B,C,D], [E,F,G,H], [I,J,K,L]
     for row_start in range(0, len(GROUPS), groups_per_row):
         row_groups = GROUPS[row_start:row_start + groups_per_row]
@@ -210,6 +214,7 @@ def ui_controls():
             except Exception as e:
                 # hard failure: surface and auto-rerun
                 st.session_state["error"] = f"{e}"
+                print(e)
                 show_failure_and_autoretry(str(e))
     with c2:
         if st.button("🏁 Complete the draw", use_container_width=True):
@@ -253,16 +258,16 @@ PO_POT4 = {
         {"name": "🇨🇭 Switzerland", "confederation": "UEFA", "pot": 2},
         {"name": "🇸🇳 Senegal", "confederation": "CAF", "pot": 2},
         {"name": "🇮🇷 Iran", "confederation": "AFC", "pot": 2},
-        {"name": "🇩🇰 Denmark", "confederation": "UEFA", "pot": 2},
         {"name": "🇰🇷 South Korea", "confederation": "AFC", "pot": 2},
         {"name": "🇦🇹 Austria", "confederation": "UEFA", "pot": 2},
+        {"name": "🇦🇺 Australia", "confederation": "AFC", "pot": 2},
     ],
     "pot3": [
-        {"name": "🇦🇺 Australia", "confederation": "AFC", "pot": 3},
         {"name": "🇵🇦 Panama", "confederation": "CONCACAF", "pot": 3},
         {"name": "🇳🇴 Norway", "confederation": "UEFA", "pot": 3},
         {"name": "🇪🇬 Egypt", "confederation": "CAF", "pot": 3},
         {"name": "🇩🇿 Algeria", "confederation": "CAF", "pot": 3},
+        {"name": "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", "confederation": "UEFA", "pot": 3},
         {"name": "🇵🇾 Paraguay", "confederation": "CONMEBOL", "pot": 3},
         {"name": "🇨🇮 Ivory Coast", "confederation": "CAF", "pot": 3},
         {"name": "🇹🇳 Tunisia", "confederation": "CAF", "pot": 3},
@@ -274,16 +279,16 @@ PO_POT4 = {
     "pot4": [
         {"name": "🇯🇴 Jordan", "confederation": "AFC", "pot": 4},
         {"name": "🇨🇻 Cape Verde", "confederation": "CAF", "pot": 4},
-        {"name": "🇯🇲 Jamaica", "confederation": "CONCACAF", "pot": 4},
+        {"name": "🇨🇼 Curaçao", "confederation": "CONCACAF", "pot": 4},
         {"name": "🇬🇭 Ghana", "confederation": "CAF", "pot": 4},
         {"name": "🇭🇹 Haiti", "confederation": "CONCACAF", "pot": 4},
         {"name": "🇳🇿 New Zealand", "confederation": "OFC", "pot": 4},
         {"name": "🇮🇹 Italy", "confederation": "UEFA", "pot": 4},
+        {"name": "🇩🇰 Denmark", "confederation": "UEFA", "pot": 4},
         {"name": "🇹🇷 Turkey", "confederation": "UEFA", "pot": 4},
         {"name": "🇺🇦 Ukraine", "confederation": "UEFA", "pot": 4},
-        {"name": "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", "confederation": "UEFA", "pot": 4},
-        {"name": "🇧🇴 Bolivia", "confederation": "CONMEBOL", "pot": 4},
-        {"name": "🇳🇬 Nigeria", "confederation": "CAF", "pot": 4},
+        {"name": "🇮🇶 Iraq", "confederation": "AFC", "pot": 4},
+        {"name": "🇨🇩 DR Congo", "confederation": "CAF", "pot": 4},
     ],
 }
 
@@ -300,12 +305,12 @@ DEFAULT_POTS = {
         {"name": "🇵🇹 Portugal", "confederation": "UEFA", "pot": 1},
         {"name": "🇳🇱 Netherlands", "confederation": "UEFA", "pot": 1},
         {"name": "🇧🇪 Belgium", "confederation": "UEFA", "pot": 1},
-        {"name": "🇮🇹 Italy", "confederation": "UEFA", "pot": 1},
+        {"name": "🇩🇪 Germany", "confederation": "UEFA", "pot": 1},
     ],
     "pot2": [
-        {"name": "🇩🇪 Germany", "confederation": "UEFA", "pot": 2},
         {"name": "🇭🇷 Croatia", "confederation": "UEFA", "pot": 2},
         {"name": "🇲🇦 Morocco", "confederation": "CAF", "pot": 2},
+        {"name": "🇮🇹 Italy", "confederation": "UEFA", "pot": 2},
         {"name": "🇨🇴 Colombia", "confederation": "CONMEBOL", "pot": 2},
         {"name": "🇺🇾 Uruguay", "confederation": "CONMEBOL", "pot": 2},
         {"name": "🇨🇭 Switzerland", "confederation": "UEFA", "pot": 2},
@@ -314,10 +319,10 @@ DEFAULT_POTS = {
         {"name": "🇩🇰 Denmark", "confederation": "UEFA", "pot": 2},
         {"name": "🇮🇷 Iran", "confederation": "AFC", "pot": 2},
         {"name": "🇰🇷 South Korea", "confederation": "AFC", "pot": 2},
-        {"name": "🇦🇹 Austria", "confederation": "UEFA", "pot": 2},
+        {"name": "🇪🇨 Ecuador", "confederation": "CONMEBOL", "pot": 2},
     ],
     "pot3": [
-        {"name": "🇪🇨 Ecuador", "confederation": "CONMEBOL", "pot": 3},
+        {"name": "🇦🇹 Austria", "confederation": "UEFA", "pot": 3},
         {"name": "🇦🇺 Australia", "confederation": "AFC", "pot": 3},
         {"name": "🇹🇷 Turkey", "confederation": "UEFA", "pot": 3},
         {"name": "🇺🇦 Ukraine", "confederation": "UEFA", "pot": 3},
@@ -326,21 +331,21 @@ DEFAULT_POTS = {
         {"name": "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland", "confederation": "UEFA", "pot": 3},
         {"name": "🇪🇬 Egypt", "confederation": "CAF", "pot": 3},
         {"name": "🇩🇿 Algeria", "confederation": "CAF", "pot": 3},
-        {"name": "🇳🇬 Nigeria", "confederation": "CAF", "pot": 3},
         {"name": "🇵🇾 Paraguay", "confederation": "CONMEBOL", "pot": 3},
         {"name": "🇹🇳 Tunisia", "confederation": "CAF", "pot": 3},
+        {"name": "🇨🇮 Ivory Coast", "confederation": "CAF", "pot": 3},
     ],
     "pot4": [
-        {"name": "🇨🇮 Ivory Coast", "confederation": "CAF", "pot": 4},
         {"name": "🇶🇦 Qatar", "confederation": "AFC", "pot": 4},
         {"name": "🇺🇿 Uzbekistan", "confederation": "AFC", "pot": 4},
         {"name": "🇸🇦 Saudi Arabia", "confederation": "AFC", "pot": 4},
+        {"name": "🇨🇩 DR Congo", "confederation": "CAF", "pot": 4},
         {"name": "🇮🇶 Iraq", "confederation": "AFC", "pot": 4},
         {"name": "🇿🇦 South Africa", "confederation": "CAF", "pot": 4},
         {"name": "🇯🇴 Jordan", "confederation": "AFC", "pot": 4},
         {"name": "🇨🇻 Cape Verde", "confederation": "CAF", "pot": 4},
-        {"name": "🇯🇲 Jamaica", "confederation": "CONCACAF", "pot": 4},
         {"name": "🇬🇭 Ghana", "confederation": "CAF", "pot": 4},
+        {"name": "🇨🇼 Curaçao", "confederation": "CONCACAF", "pot": 4},
         {"name": "🇭🇹 Haiti", "confederation": "CONCACAF", "pot": 4},
         {"name": "🇳🇿 New Zealand", "confederation": "OFC", "pot": 4},
     ],
@@ -371,6 +376,38 @@ def main():
 
         st.markdown("### Pots Setup")
 
+        # Tooltip CSS
+        st.markdown("""
+        <style>
+        .tooltip {
+          position: relative;
+          display: inline-block;
+          cursor: pointer;
+        }
+
+        .tooltip .tooltiptext {
+          visibility: hidden;
+          width: 260px;
+          background-color: #333;
+          color: #fff;
+          text-align: left;
+          border-radius: 6px;
+          padding: 8px;
+          position: absolute;
+          z-index: 1000;
+          left: 20px;
+          top: -5px;
+          opacity: 0;
+          transition: opacity 0.2s;
+        }
+
+        .tooltip:hover .tooltiptext {
+          visibility: visible;
+          opacity: 1;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         # --- Source picker ---
         st.session_state.pots_source_key = st.radio(
             "Choose a starting set",
@@ -380,14 +417,49 @@ def main():
             ),
         )
 
+        # Small legend with info icons for each option
+        st.markdown(
+            """
+            <small>
+            <div>
+              <strong>Ranking Based (default)</strong>
+              <span class="tooltip"> ℹ️
+                <span class="tooltiptext">
+                  Uses the expected FIFA-style constraints.<br>
+                  • Playoff teams seeded by ranking.<br>
+                  • UEFA must appear in every group.<br>
+                  • Standard confederation balancing.
+                </span>
+              </span>
+            </div>
+            <div style="margin-top:4px;">
+              <strong>Playoff Based (option)</strong>
+              <span class="tooltip"> ℹ️
+                <span class="tooltiptext">
+                  Uses 2022-based playoff seeding.<br>
+                  • All playoff teams placed in Pot 4.<br>
+                  • No requirement for UEFA in every group.<br>
+                  • Freer UEFA distribution across groups.
+                </span>
+              </span>
+            </div>
+            </small>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # Resolve the actual dict object for the selection
-        selected_source_name = POT_SOURCES[st.session_state.pots_source_key]  # "DEFAULT_POTS" or "LATEST_POTS"
+        selected_source_name = POT_SOURCES[st.session_state.pots_source_key]
         selected_pots_obj = DEFAULT_POTS if selected_source_name == "DEFAULT_POTS" else PO_POT4
 
         # Button to immediately load the selected source into the app state
         if st.button("📦 Use selected pots"):
             reset_state(selected_pots_obj)
             st.session_state.pots_baseline = deepcopy(selected_pots_obj)
+            # Toggle UEFA-every-group requirement based on pot source
+            st.session_state.require_uefa_in_every_group = (
+                selected_source_name == "DEFAULT_POTS"
+            )
             st.success(f"Loaded {st.session_state.pots_source_key}.")
 
         # Pre-fill each pot's textarea from the *currently selected* source
